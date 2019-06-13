@@ -1,0 +1,365 @@
+From f31212fc2f8ab67ac66d47f1d088448ad4290555 Mon Sep 17 00:00:00 2001
+From: ripples <564311873@qq.com>
+Date: Tue, 3 Apr 2018 14:19:07 +0800
+Subject: [PATCH 4/6] feat: add pwngdb from angelboy
+
+---
+ pwndbg/__init__.py        |   1 +
+ pwndbg/commands/pwngdb.py | 182 ++++++++++++++++++++++++++++++++++++++
+ pwndbg/pwngdb.py          | 143 ++++++++++++++++++++++++++++++
+ 3 files changed, 326 insertions(+)
+ create mode 100644 pwndbg/commands/pwngdb.py
+ create mode 100644 pwndbg/pwngdb.py
+
+diff --git a/pwndbg/__init__.py b/pwndbg/__init__.py
+index 91d6f9d..d26b850 100755
+--- a/pwndbg/__init__.py
++++ b/pwndbg/__init__.py
+@@ -35,6 +35,7 @@ import pwndbg.commands.misc
+ import pwndbg.commands.pie
+ import pwndbg.commands.probeleak
+ import pwndbg.commands.procinfo
++import pwndbg.commands.pwngdb
+ import pwndbg.commands.radare2
+ import pwndbg.commands.reload
+ import pwndbg.commands.rop
+diff --git a/pwndbg/commands/pwngdb.py b/pwndbg/commands/pwngdb.py
+new file mode 100644
+index 0000000..970b444
+--- /dev/null
++++ b/pwndbg/commands/pwngdb.py
+@@ -0,0 +1,182 @@
++#!/usr/bin/env python
++# -*- coding: utf-8 -*-
++"""
++Pwngdb by angelboy
++
++https://github.com/scwuaptx/Pwngdb
++
++Modified by ripples
++"""
++from __future__ import absolute_import
++from __future__ import division
++from __future__ import print_function
++from __future__ import unicode_literals
++
++import copy
++import os
++import re
++import subprocess
++
++import gdb
++
++import pwndbg.arch
++import pwndbg.commands
++import pwndbg.proc
++import pwndbg.search
++from pwndbg.color import message
++from pwndbg.pwngdb import *
++
++
++@pwndbg.commands.Command
++def at(*arg):
++    """Automatically attach process by filename."""
++    processname = arg[0] if len(arg) > 0 else pwndbg.proc.exe
++
++    try:
++        cmd = 'pidof $(basename {})'.format(processname)
++        output = subprocess.check_output(cmd, shell=True).decode('utf8')
++        pidlist = map(int, output.split())
++
++        for pid in pidlist:
++            if pid == pwndbg.proc.pid:
++                continue
++            print(message.notice('attaching to {} ...'.format(processname)))
++            gdb.execute("attach {}".format(pid))
++            getheapbase()
++            libcbase()
++            codeaddr()
++            ldbase()
++            return
++
++        print(message.warn("already attached on {}".format(pwndbg.proc.pid)))
++    except:
++        print(message.warn("no such process"))
++
++
++@pwndbg.commands.Command
++@pwndbg.commands.OnlyWhenRunning
++def libcbase():
++    """ Get libc base """
++    print(message.success('libc: ') + hex(getlibcbase()))
++
++
++@pwndbg.commands.Command
++@pwndbg.commands.OnlyWhenRunning
++def heapbase():
++    """ Get heapbase """
++    heapbase = getheapbase()
++    if heapbase:
++        print(message.success("heapbase: ") + hex(heapbase))
++    else:
++        print(message.warn("heap not found"))
++
++
++@pwndbg.commands.Command
++@pwndbg.commands.OnlyWhenRunning
++def ldbase():
++    """ Get ld.so base """
++    print(message.success("ld: ") + hex(getldbase()))
++
++
++@pwndbg.commands.Command
++@pwndbg.commands.OnlyWhenRunning
++def codebase():
++    """ Get text base """
++    codebs = codeaddr()[0]
++    print(message.success("codebase: ") + hex(codebs))
++
++
++@pwndbg.commands.Command
++@pwndbg.commands.OnlyWhenRunning
++def tls():
++    """ Get tls base """
++    tlsaddr = gettls()
++    if tlsaddr != -1:
++        print(message.success("tls: ") + hex(tlsaddr))
++    else:
++        print(message.warn("cannot get tls"))
++
++
++@pwndbg.commands.Command
++@pwndbg.commands.OnlyWhenRunning
++def fmtarg(addr):
++    """ Calculate the index of format string """
++    if pwndbg.arch.current == "i386":
++        reg = "esp"
++    elif pwndbg.arch.current == "x86-64":
++        reg = "rsp"
++    else:
++        print(message.warn("arch not support"))
++        return
++
++    start = int(
++        gdb.execute("info register {}".format(reg),
++                    to_string=True).split()[1].strip(), 16)
++    idx = (int(addr, 0) - start) / (pwndbg.arch.ptrsize) + 6
++    print(message.success("The index of format argument: ") + str(idx))
++
++
++@pwndbg.commands.Command
++@pwndbg.commands.OnlyWhenRunning
++def off(symbol):
++    """ Calculate the offset of libc """
++    symaddr = getoff(symbol)
++    if symaddr == -1:
++        print(message.warn("symbol not found"))
++        return
++
++    if type(symbol) is int:
++        print(message.success(hex(symbol) + ": ") + hex(symaddr))
++    else:
++        print(message.success(symbol + ": ") + hex(symaddr))
++
++
++@pwndbg.commands.Command
++@pwndbg.commands.OnlyWhenRunning
++def findsyscall(*arg):
++    """ ind the syscall gadget"""
++    vmmap = arg[0] if len(arg) > 0 else pwndbg.proc.exe
++    arch = pwndbg.arch.current
++    start, end = codeaddr()
++
++    if arch == "x86-64":
++        gdb.execute("search -e -x 0f05 {}".format(vmmap))
++    elif arch == "i386":
++        gdb.execute("search -e -x cd80 {}".format(vmmap))
++    elif arch == "arm":
++        gdb.execute("search -e -x 00df80bc {}".format(vmmap))
++    elif arch == "aarch64":
++        gdb.execute("search -e -x 010000d4 {}".format(vmmap))
++    else:
++        print(message.warn("arch not support"))
++
++
++@pwndbg.commands.Command
++@pwndbg.commands.OnlyWithFile
++def dyn():
++    """ Print dynamic section """
++    cmd = "readelf -d {}".format(pwndbg.proc.exe)
++    print(subprocess.check_output(cmd, shell=True).decode("utf8").strip())
++
++
++@pwndbg.commands.Command
++@pwndbg.commands.OnlyWithFile
++def findcall(symbol):
++    """ Find some function call """
++    call = searchcall(symbol)
++    print(call) if call != -1 else print(message.warn("symbol not found"))
++
++
++@pwndbg.commands.Command
++@pwndbg.commands.OnlyWithFile
++def bcall(symbol):
++    """ Set the breakpoint at some function call """
++    call = searchcall(symbol)
++    if call == -1:
++        print(message.warn("symbol not found"))
++        return
++
++    codebase = codeaddr()[0] if ispie() else 0
++    for callbase in call.split('\n'):
++        addr = int(callbase.split(':')[0], 16) + codebase
++        gdb.execute("b *{}".format(hex(addr)))
+diff --git a/pwndbg/pwngdb.py b/pwndbg/pwngdb.py
+new file mode 100644
+index 0000000..0e72980
+--- /dev/null
++++ b/pwndbg/pwngdb.py
+@@ -0,0 +1,143 @@
++#!/usr/bin/env python
++# -*- coding: utf-8 -*-
++"""
++Pwngdb by angelboy
++
++https://github.com/scwuaptx/Pwngdb
++
++Modified by ripples
++"""
++from __future__ import absolute_import
++from __future__ import division
++from __future__ import print_function
++from __future__ import unicode_literals
++
++import re
++import struct
++import subprocess
++
++import gdb
++
++import pwndbg.arch
++import pwndbg.proc
++import pwndbg.search
++
++
++def to_int(val):
++    try:
++        return int(str(val), 0)
++    except:
++        return val
++
++
++def procmap():
++    data = gdb.execute("info proc exe", to_string=True)
++    pid = re.search("process.*", data)
++    if pid:
++        pid = pid.group().split()[1]
++        with open("/proc/{}/maps".format(pid), "r") as maps:
++            return maps.read()
++    else:
++        return "error"
++
++
++def getlibcbase():
++    data = re.search(".*libc.*\.so", procmap())
++    if data:
++        libcaddr = data.group().split("-")[0]
++        gdb.execute("set $libc={}".format(hex(int(libcaddr, 16))))
++        return int(libcaddr, 16)
++    else:
++        return 0
++
++
++def getheapbase():
++    data = re.search(".*heap\]", procmap())
++    if data:
++        heapbase = data.group().split("-")[0]
++        gdb.execute("set $heap={}".format(hex(int(heapbase, 16))))
++        return int(heapbase, 16)
++    else:
++        return 0
++
++
++def getldbase():
++    data = re.search(".*ld.*\.so", procmap())
++    if data:
++        ldaddr = data.group().split("-")[0]
++        gdb.execute("set $ld={}".format(hex(int(ldaddr, 16))))
++        return int(ldaddr, 16)
++    else:
++        return 0
++
++
++def codeaddr():  # ret (start, end)
++    pat = ".*" + pwndbg.proc.exe
++    data = re.findall(pat, procmap())
++    if data:
++        codebaseaddr = data[0].split("-")[0]
++        codeend = data[0].split("-")[1].split()[0]
++        gdb.execute("set $code={}".format(hex(int(codebaseaddr, 16))))
++        return (int(codebaseaddr, 16), int(codeend, 16))
++    else:
++        return (0, 0)
++
++
++def gettls():
++    arch = pwndbg.arch.current
++
++    if arch == "i386":
++        vsysaddr = gdb.execute(
++            "info functions __kernel_vsyscall",
++            to_string=True).split("\n")[-2].split()[0].strip()
++        value = struct.pack("<L", int(vsysaddr, 16))
++        sysinfo = [address for address in pwndbg.search.search(value)][0]
++        return sysinfo - 0x10
++    elif arch == "x86-64":
++        gdb.execute("call arch_prctl(0x1003, $rsp-8)", to_string=True)
++        data = gdb.execute("x/xg $rsp-8", to_string=True)
++        return int(data.split(":")[1].strip(), 16)
++    else:
++        return -1
++
++
++def getoff(symbol):
++    libc = getlibcbase()
++    symbol = to_int(symbol)
++
++    if isinstance(symbol, int):
++        return symbol - libc
++    else:
++        try:
++            data = gdb.execute("x/x " + symbol, to_string=True)
++            if "No symbol" in data:
++                return -1
++            else:
++                symaddr = int(re.search("0x.*[0-9a-f] ", data).group()[:-1], 16)
++                return symaddr - libc
++        except:
++            return -1
++
++
++def iscplus():
++    return "CXX" in subprocess.check_output(
++        "readelf -s {}".format(pwndbg.proc.exe), shell=True).decode("utf8")
++
++
++def searchcall(symbol):
++    procname = pwndbg.proc.exe
++    cmd = "objdump -d -M intel {} {}".format(
++        "--demangle" if iscplus() else "",
++        procname,)
++    cmd += "| grep 'call.*{}@plt'".format(symbol)
++    try:
++        return subprocess.check_output(
++            cmd, shell=True).decode("utf8").strip("\n")
++    except:
++        return -1
++
++
++def ispie():
++    result = subprocess.check_output(
++        "readelf -h {}".format(pwndbg.proc.exe), shell=True).decode("utf8")
++    return True if re.search("DYN", result) else False
+--
+2.17.0
+

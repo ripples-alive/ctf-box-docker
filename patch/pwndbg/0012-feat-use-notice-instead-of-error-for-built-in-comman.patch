@@ -1,0 +1,26 @@
+From 4b72030720396cba10aa95dd78a73e5608350795 Mon Sep 17 00:00:00 2001
+From: ripples <564311873@qq.com>
+Date: Sat, 24 Nov 2018 00:48:14 +0800
+Subject: [PATCH] feat: use notice instead of error for built-in command
+ overriding
+
+---
+ pwndbg/commands/__init__.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/pwndbg/commands/__init__.py b/pwndbg/commands/__init__.py
+index 03b4585..622b79c 100644
+--- a/pwndbg/commands/__init__.py
++++ b/pwndbg/commands/__init__.py
+@@ -57,7 +57,7 @@ class Command(gdb.Command):
+         if command_name in self.command_names:
+             raise Exception('Cannot add command %s: already exists.' % command_name)
+         if command_name in GDB_BUILTIN_COMMANDS and command_name not in self.builtin_override_whitelist:
+-            raise Exception('Cannot override non-whitelisted built-in command "%s"' % command_name)
++            print(pwndbg.color.message.warn('NOTICE: Overrode non-whitelisted built-in command "%s"' % command_name))
+ 
+         self.command_names.add(command_name)
+         commands.append(self)
+-- 
+2.19.1
+

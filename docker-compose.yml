@@ -1,0 +1,34 @@
+version: '3'
+
+services:
+  ctf-box-18.04:
+    build:
+      context: .
+      dockerfile: Dockerfile-18.04
+      args:
+        CONCURRENCY: ${CONCURRENCY}
+    image: ripples/ctf-box:18.04
+    container_name: ctf-box-18.04
+    command: /sbin/my_init
+    ports:
+      - "1804:22"
+    volumes:
+      - ~/workspace/CTF:/root/workspace
+    hostname: ctf-box
+    privileged: true
+
+  ctf-box-16.04:
+    build:
+      context: .
+      dockerfile: Dockerfile-16.04
+      args:
+        CONCURRENCY: ${CONCURRENCY}
+    image: ripples/ctf-box:16.04
+    container_name: ctf-box-16.04
+    command: /sbin/my_init
+    ports:
+      - "1604:22"
+    volumes:
+      - ~/workspace/CTF:/root/workspace
+    hostname: ctf-box
+    privileged: true

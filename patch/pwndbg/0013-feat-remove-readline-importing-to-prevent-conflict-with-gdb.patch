@@ -1,0 +1,25 @@
+From 1dec4338ec241b5f91a8a80a1637f9af09505cd8 Mon Sep 17 00:00:00 2001
+From: ripples <564311873@qq.com>
+Date: Thu, 13 Jun 2019 00:20:48 +0800
+Subject: [PATCH 1/1] feat: remove readline importing to prevent conflict with
+ gdb
+
+---
+ pwndbg/commands/history.py | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/pwndbg/commands/history.py b/pwndbg/commands/history.py
+index ed3769a..69b98bb 100644
+--- a/pwndbg/commands/history.py
++++ b/pwndbg/commands/history.py
+@@ -9,7 +9,6 @@ from __future__ import print_function
+ from __future__ import unicode_literals
+ 
+ import argparse
+-import readline
+ 
+ import gdb
+ 
+-- 
+2.17.1
+

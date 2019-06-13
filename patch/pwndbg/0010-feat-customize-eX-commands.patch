@@ -1,0 +1,26 @@
+From 36b3eb27ae674c641b1e07ad0bc2f1c9fdfcd4d5 Mon Sep 17 00:00:00 2001
+From: ctf-box <ctf-box@q2zy.com>
+Date: Tue, 21 Aug 2018 17:27:52 +0000
+Subject: [PATCH] feat: customize eX commands
+
+---
+ pwndbg/commands/windbg.py | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/pwndbg/commands/windbg.py b/pwndbg/commands/windbg.py
+index 8da8b8f..31e78c2 100644
+--- a/pwndbg/commands/windbg.py
++++ b/pwndbg/commands/windbg.py
+@@ -197,8 +197,7 @@ def eX(size, address, data, hex=True):
+         if hex:
+             bytestr = str(bytestr)
+ 
+-            if bytestr.startswith('0x'):
+-                bytestr = bytestr[2:]
++            bytestr = '{:#x}'.format(int(bytestr, 0)).lstrip('0x')
+ 
+             bytestr = bytestr.rjust(size*2, '0')
+ 
+-- 
+2.7.4
+

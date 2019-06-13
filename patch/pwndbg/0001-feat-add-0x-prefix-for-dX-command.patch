@@ -1,0 +1,25 @@
+From 2f682afbe64428f707c6bb8d4e260a4ba9141e78 Mon Sep 17 00:00:00 2001
+From: ripples <564311873@qq.com>
+Date: Tue, 3 Apr 2018 00:04:19 +0800
+Subject: [PATCH 1/6] feat: add '0x' prefix for dX command
+
+---
+ pwndbg/commands/windbg.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/pwndbg/commands/windbg.py b/pwndbg/commands/windbg.py
+index affdeda..f6a0612 100644
+--- a/pwndbg/commands/windbg.py
++++ b/pwndbg/commands/windbg.py
+@@ -112,7 +112,7 @@ def enhex(size, value):
+     value = value & pwndbg.arch.ptrmask
+     x = "%x" % abs(value)
+     x = x.rjust(size * 2, '0')
+-    return x
++    return '0x' + x
+ 
+ 
+ parser = argparse.ArgumentParser(description="Write hex bytes at the specified address.")
+-- 
+2.17.0
+
